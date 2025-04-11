@@ -5,14 +5,14 @@ A command-line tool for deploying React applications to production environments.
 ## Development Setup
 
 ### Prerequisites
-- Python 3.7+
+- Python 3
 - Docker (for testing deployment)
 
 ### Installation
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/vessel.git
+git clone https://github.com/raham24/deadlock.git
 cd vessel
 ```
 
