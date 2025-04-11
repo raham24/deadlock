@@ -1,0 +1,3 @@
+[console_scripts]
+vessel = vessel.main:cli
+

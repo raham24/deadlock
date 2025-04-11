@@ -1,0 +1,10 @@
+README.md
+setup.py
+vessel/__init__.py
+vessel/main.py
+vessel.egg-info/PKG-INFO
+vessel.egg-info/SOURCES.txt
+vessel.egg-info/dependency_links.txt
+vessel.egg-info/entry_points.txt
+vessel.egg-info/requires.txt
+vessel.egg-info/top_level.txt
