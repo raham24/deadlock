@@ -56,5 +56,49 @@ def get_repository_id():
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
 
+@app.route('/api/repo/scan', methods=['POST'])
+def dispatch_scan():
+    try:
+        data = request.get_json()
+
+        # Extract values
+        api_key = data.get("apiKey")
+        repo_id = data.get("repoId")
+        event_type = data.get("eventType")
+        pr_url = data.get("pullRequest")
+        target_branch = data.get("targetBranch")
+        api_url = data.get("apiUrl")
+
+        # Prepare payload to forward to real API
+        payload = {
+            "apiKey": api_key,
+            "repoId": repo_id,
+            "actionRunId": 42069,
+            "eventType": event_type,
+            "pullRequest": pr_url,
+            "targetBranch": target_branch,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(
+            f"{PENSAR_API_URL}",
+            json=payload,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            return jsonify({
+                "error": f"Failed to queue scan: {response.json().get('message')}"
+            }), response.status_code
+
+        return jsonify({"message": "Scan queued successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
