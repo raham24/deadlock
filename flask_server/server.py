@@ -1,146 +1,227 @@
-from flask import Flask, request, jsonify, send_from_directory
-import os
+from flask import Flask, request, jsonify
 import requests
-from flask_cors import CORS
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from a .env file
+
 app = Flask(__name__)
 
-CORS(app)
-
-load_dotenv()
-GITHUB_API_URL = os.environ.get('GITHUB_API_URL')
-PENSAR_API_URL = 'https://api.pensar.dev/ci/scan/dispatch'
-
-
-@app.errorhandler(404)
-def not_found(e):
-    return jsonify({"error": "Not found"}), 404
+# Configuration
+GITHUB_API_TOKEN = os.getenv('GITHUB_API_TOKEN')
+PENSAR_API_KEY = os.getenv('PENSAR_API_KEY')
+PENSAR_API_URL = "https://api.pensar.dev/ci/scan/dispatch"
+PENSAR_STATUS_URL = "https://api.pensar.dev/ci/scan/status"
+PENSAR_ISSUES_URL = "https://api.pensar.dev/ci/scan/issues"
 
 
-@app.errorhandler(500)
-def server_error(e):
-    return jsonify({"error": "Internal server error"}), 500
-
-
-def parse_github_url(github_url):
-    if 'github.com/' not in github_url:
-        raise ValueError("Invalid GitHub URL")
-
-    repo_path = github_url.split("github.com/")[1]
-    repo_path = repo_path.split('#')[0].split('?')[0].rstrip('/')
-
-    parts = repo_path.split("/")
-    if len(parts) < 2:
-        raise ValueError("Invalid repository format")
-
-    return parts[0], parts[1]
-
-
-@app.route('/api/repo/id', methods=['POST'])
-def get_repository_id():
+@app.route('/trigger-scan', methods=['POST'])
+def trigger_scan():
+    # Get data from request
     data = request.json
-    if not data or 'github_url' not in data:
-        return jsonify({"error": "Github URL is required"}), 400
-    github_url = data["github_url"]
 
-    if 'github.com/' not in github_url:
-        return jsonify({"error": "Invalid github URL"}), 400
+    if not data or not all(k in data for k in ['owner', 'repo', 'prNumber', 'targetBranch']):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    owner = data['owner']
+    repo = data['repo']
+    pr_number = data['prNumber']
+    target_branch = data['targetBranch']
 
     try:
-        owner, repo = parse_github_url(github_url)
-
-        response = requests.get(f"{GITHUB_API_URL}/repos/{owner}/{repo}")
-        response.raise_for_status()
-
-        repo_data = response.json()
+        # Get repository ID from GitHub API
+        repo_response = requests.get(
+            f"https://api.github.com/repos/{owner}/{repo}",
+            headers={
+                "Authorization": f"token {GITHUB_API_TOKEN}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+        )
+        repo_response.raise_for_status()
+        repo_data = repo_response.json()
         repo_id = repo_data['id']
 
-        return jsonify({
-            "id": repo_id,
-            "name": repo_data['name'],
-            "owner": repo_data['owner']['login'],
-            "url": repo_data['html_url']
-        })
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"GitHub API error: {str(e)}"}), 500
-    except Exception as e:
-        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+        # Construct pull request URL
+        pull_request_url = f"https://github.com/{owner}/{repo}/pull/{pr_number}"
 
-
-@app.route('/api/repo/pull', methods=['POST'])
-def get_pullrequest_url():
-    data = request.json
-    if not data or 'github_url' not in data:
-        return jsonify({"error": "Github URL is required"}), 400
-    if not data or 'pull_number' not in data:
-        return jsonify({"error": "Pull request number required"}), 400
-    github_url = data["github_url"]
-
-    if 'github.com/' not in github_url:
-        return jsonify({"error": "Invalid github URL"}), 400
-
-    try:
-        owner, repo = parse_github_url(github_url)
-        pull_number = data["pull_number"]
-        response = requests.get(
-            f"{GITHUB_API_URL}/repos/{owner}/{repo}/pulls/{pull_number}")
-        response.raise_for_status()
-
-        repo_data = response.json()
-        url = repo_data["url"]
-
-        return jsonify({
-            "url": url
-        })
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"GitHub API error: {str(e)}"}), 500
-    except Exception as e:
-        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
-
-
-@app.route('/api/repo/scan', methods=['POST'])
-def dispatch_scan():
-    try:
-        data = request.get_json()
-
-        api_key = data.get("apiKey")
-        repo_id = data.get("repoId")
-        event_type = data.get("eventType")
-        pr_url = data.get("pullRequest")
-        target_branch = data.get("targetBranch")
-        api_url = data.get("apiUrl")
-
-        payload = {
-            "apiKey": api_key,
+        # Send request to Pensar API
+        pensar_payload = {
             "repoId": repo_id,
-            "actionRunId": 42069,
-            "eventType": event_type,
-            "pullRequest": pr_url,
+            "apiKey": PENSAR_API_KEY,
             "targetBranch": target_branch,
+            "actionRunId": 1,  # As per your example
+            "pullRequest": pull_request_url,
+            "eventType": "pull-request"
         }
 
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-
-        response = requests.post(
-            f"{PENSAR_API_URL}",
-            json=payload,
-            headers=headers
+        pensar_response = requests.post(
+            PENSAR_API_URL,
+            json=pensar_payload
         )
+        pensar_response.raise_for_status()
 
-        if response.status_code != 200:
-            return jsonify({
-                "error": f"Failed to queue scan: {response.json().get('message')}"
-            }), response.status_code
+        return jsonify({
+            "success": True,
+            "repoId": repo_id,
+            "pullRequest": pull_request_url,
+            "pensarResponse": pensar_response.json()
+        })
 
-        return jsonify({"message": "Scan queued successfully"}), 200
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            "error": str(e),
+            "details": e.response.json() if hasattr(e, 'response') and e.response else None
+        }), 500
 
+
+@app.route('/check-scan-status', methods=['POST'])
+def check_scan_status():
+    # Get data from request
+    data = request.json
+
+    if not data or 'scanId' not in data:
+        return jsonify({"error": "Missing scanId"}), 400
+
+    scan_id = data['scanId']
+
+    try:
+        # Send request to Pensar status API
+        status_payload = {
+            "scanId": scan_id,
+            "apiKey": PENSAR_API_KEY
+        }
+
+        status_response = requests.post(
+            PENSAR_STATUS_URL,
+            json=status_payload
+        )
+        status_response.raise_for_status()
+
+        return jsonify({
+            "success": True,
+            "scanId": scan_id,
+            "statusResponse": status_response.json()
+        })
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            "error": str(e),
+            "details": e.response.json() if hasattr(e, 'response') and e.response else None
+        }), 500
+
+
+@app.route('/get-scan-issues', methods=['POST'])
+def get_scan_issues():
+    # Get data from request
+    data = request.json
+
+    if not data or 'scanId' not in data:
+        return jsonify({"error": "Missing scanId"}), 400
+
+    scan_id = data['scanId']
+
+    try:
+        # Send request to Pensar issues API
+        issues_payload = {
+            "scanId": scan_id,
+            "apiKey": PENSAR_API_KEY
+        }
+
+        issues_response = requests.post(
+            PENSAR_ISSUES_URL,
+            json=issues_payload
+        )
+        issues_response.raise_for_status()
+
+        return jsonify({
+            "success": True,
+            "scanId": scan_id,
+            "issuesResponse": issues_response.json()
+        })
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            "error": str(e),
+            "details": e.response.json() if hasattr(e, 'response') and e.response else None
+        }), 500
+
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok"})
+
+@app.route('/api/issues', methods=['GET'])
+def get_issues():
+    """Get all issues or filter by severity/category"""
+    severity = request.args.get('severity')
+    category = request.args.get('category')
+    
+    if severity:
+        issues = issue_manager.get_issues_by_severity(severity)
+    elif category:
+        issues = issue_manager.get_issues_by_category(category)
+    else:
+        issues = issue_manager.get_all_issues()
+    
+    return jsonify({"issues": issues})
+
+@app.route('/api/issues/report', methods=['GET'])
+def get_issues_report():
+    """Get a summary report of all issues"""
+    report = issue_manager.generate_report()
+    return jsonify(report)
+
+@app.route('/api/issues', methods=['POST'])
+def add_issue():
+    """Add a new issue"""
+    data = request.json
+    
+    try:
+        issue = Issue(**data)
+        issue_manager.add_issue(issue)
+        return jsonify({"message": "Issue added successfully", "issue": issue.to_dict()}), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 400
 
+@app.route('/api/issues/bulk', methods=['POST'])
+def add_issues_bulk():
+    """Add multiple issues at once"""
+    data = request.json
+    
+    if not isinstance(data, list):
+        return jsonify({"error": "Expected a list of issues"}), 400
+    
+    issue_manager.add_issues_from_list(data)
+    return jsonify({"message": f"Added {len(data)} issues"}), 201
 
+@app.route('/api/issues', methods=['DELETE'])
+def clear_issues():
+    """Clear all issues"""
+    issue_manager.clear_issues()
+    return jsonify({"message": "All issues cleared"}), 200
+
+@app.route('/api/issues/save', methods=['POST'])
+def save_issues():
+    """Save issues to a file"""
+    data = request.json
+    filepath = data.get('filepath', 'issues.json')
+    
+    success = issue_manager.save_to_file(filepath)
+    if success:
+        return jsonify({"message": f"Saved issues to {filepath}"}), 200
+    else:
+        return jsonify({"error": "Failed to save issues"}), 500
+
+@app.route('/api/issues/load', methods=['POST'])
+def load_issues():
+    """Load issues from a file"""
+    data = request.json
+    filepath = data.get('filepath', 'issues.json')
+    
+    success = issue_manager.load_from_file(filepath)
+    if success:
+        return jsonify({"message": f"Loaded issues from {filepath}", "count": len(issue_manager.issues)}), 200
+    else:
+        return jsonify({"error": f"Failed to load issues from {filepath}"}), 500
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
