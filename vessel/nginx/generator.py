@@ -1,3 +1,4 @@
+# vessel/nginx/generator.py
 import os
 import logging
 
