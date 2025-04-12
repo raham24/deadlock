@@ -19,7 +19,11 @@ SAFE_DIR = "saved_issues"
 os.makedirs(SAFE_DIR, exist_ok=True)
 
 def is_safe_filename(filename):
-    return re.match(r'^[\w\-\.]+\.json$', filename) is not None
+    return (
+        re.match(r'^[\w\-\.]+\.json$', filename) and
+        '..' not in filename and
+        not filename.startswith('/')
+    )
 
 @app.route('/trigger-scan', methods=['POST'])
 def trigger_scan():
@@ -183,7 +187,7 @@ def save_issues():
     if not is_safe_filename(filename):
         return jsonify({"error": "Invalid file name"}), 400
 
-    filepath = os.path.join(SAFE_DIR, filename)
+    filepath = os.path.join(SAFE_DIR, os.path.basename(filename))
 
     success = issue_manager.save_to_file(filepath)
     if success:
@@ -199,7 +203,7 @@ def load_issues():
     if not is_safe_filename(filename):
         return jsonify({"error": "Invalid file name"}), 400
 
-    filepath = os.path.join(SAFE_DIR, filename)
+    filepath = os.path.join(SAFE_DIR, os.path.basename(filename))
 
     success = issue_manager.load_from_file(filepath)
     if success:
@@ -208,4 +212,4 @@ def load_issues():
         return jsonify({"error": f"Failed to load issues from {filepath}"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+    app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))

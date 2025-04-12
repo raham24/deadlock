@@ -9,7 +9,7 @@ class Issue:
     id: str
     title: str
     description: str
-    severity: str  # "high", "medium", "low"
+    severity: str
     file_path: Optional[str] = None
     line_number: Optional[int] = None
     recommendation: Optional[str] = None
