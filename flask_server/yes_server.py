@@ -11,6 +11,8 @@ app = Flask(__name__)
 GITHUB_API_TOKEN = os.getenv('GITHUB_API_TOKEN')
 PENSAR_API_KEY = os.getenv('PENSAR_API_KEY')
 PENSAR_API_URL = "https://api.pensar.dev/ci/scan/dispatch"
+PENSAR_STATUS_URL = "https://api.pensar.dev/ci/scan/status"
+PENSAR_ISSUES_URL = "https://api.pensar.dev/ci/scan/issues"
 
 @app.route('/trigger-scan', methods=['POST'])
 def trigger_scan():
@@ -69,6 +71,80 @@ def trigger_scan():
             "error": str(e),
             "details": e.response.json() if hasattr(e, 'response') and e.response else None
         }), 500
+
+        
+        
+@app.route('/check-scan-status', methods=['POST'])
+
+def check_scan_status():
+    # Get data from request
+    data = request.json
+    
+    if not data or 'scanId' not in data:
+        return jsonify({"error": "Missing scanId"}), 400
+    
+    scan_id = data['scanId']
+    
+    try:
+        # Send request to Pensar status API
+        status_payload = {
+            "scanId": scan_id,
+            "apiKey": PENSAR_API_KEY
+        }
+        
+        status_response = requests.post(
+            PENSAR_STATUS_URL,
+            json=status_payload
+        )
+        status_response.raise_for_status()
+        
+        return jsonify({
+            "success": True,
+            "scanId": scan_id,
+            "statusResponse": status_response.json()
+        })
+        
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            "error": str(e),
+            "details": e.response.json() if hasattr(e, 'response') and e.response else None
+        }), 500
+
+@app.route('/get-scan-issues', methods=['POST'])
+def get_scan_issues():
+    # Get data from request
+    data = request.json
+    
+    if not data or 'scanId' not in data:
+        return jsonify({"error": "Missing scanId"}), 400
+    
+    scan_id = data['scanId']
+    
+    try:
+        # Send request to Pensar issues API
+        issues_payload = {
+            "scanId": scan_id,
+            "apiKey": PENSAR_API_KEY
+        }
+        
+        issues_response = requests.post(
+            PENSAR_ISSUES_URL,
+            json=issues_payload
+        )
+        issues_response.raise_for_status()
+        
+        return jsonify({
+            "success": True,
+            "scanId": scan_id,
+            "issuesResponse": issues_response.json()
+        })
+        
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            "error": str(e),
+            "details": e.response.json() if hasattr(e, 'response') and e.response else None
+        }), 500
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
