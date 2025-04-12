@@ -1,46 +1,53 @@
 import os
+import subprocess
 import click
-from colorama import init, Fore, Style
 
-# Initialize colorama for colored terminal output
-init()
+def detect_project_type(project_path):
+    package_json_path = os.path.join(project_path, "package.json")
+    pubspec_path = os.path.join(project_path, "pubspec.yaml")
+
+    if os.path.exists(pubspec_path):
+        return "flutter"
+    elif os.path.exists(package_json_path):
+        try:
+            with open(package_json_path) as f:
+                package_data = f.read()
+                # Looser match to detect react in either dependencies or devDependencies
+                if "react" in package_data:
+                    return "react"
+                else:
+                    return "node"
+        except Exception as e:
+            print("⚠️ Failed to read package.json:", e)
+            return "node"
+    else:
+        return "unknown"
+
 
 @click.group()
-@click.version_option(version="0.1.0")
 def cli():
-    """Vessel - Production deployment made simple for React applications."""
     pass
 
 @cli.command()
-@click.argument("project_path", type=click.Path(exists=True))
+@click.argument('project_path')
 def build(project_path):
-    """Build Docker configuration for a React project."""
-    # Convert to absolute path for clarity in output
     abs_path = os.path.abspath(project_path)
+    project_type = detect_project_type(abs_path)
     
-    click.echo(f"{Fore.BLUE}Starting Vessel build process for: {abs_path}{Style.RESET_ALL}")
-    
-    # Check if it's actually a React project (very basic check)
-    package_json = os.path.join(abs_path, 'package.json')
-    if not os.path.exists(package_json):
-        click.echo(f"{Fore.RED}Error: No package.json found. This doesn't appear to be a Node.js project.{Style.RESET_ALL}")
-        return
-    
-    click.echo(f"{Fore.GREEN}Found package.json. Proceeding with build...{Style.RESET_ALL}")
-    
-    # In a real implementation, you would:
-    # 1. Analyze the project structure
-    # 2. Generate Docker configuration files
-    # 3. Set up the production environment
-    
-    # For now, just simulate these steps with messages
-    click.echo(f"{Fore.YELLOW}Analyzing project structure...{Style.RESET_ALL}")
-    click.echo(f"{Fore.YELLOW}Generating Dockerfile...{Style.RESET_ALL}")
-    click.echo(f"{Fore.YELLOW}Generating nginx configuration...{Style.RESET_ALL}")
-    click.echo(f"{Fore.YELLOW}Setting up production environment...{Style.RESET_ALL}")
-    
-    # Output success message
-    click.echo(f"{Fore.GREEN}Build complete! Your React project is ready for production deployment.{Style.RESET_ALL}")
+    print(f"📁 Project path: {abs_path}")
+    print(f"🔍 Detected project type: {project_type}")
 
-if __name__ == "__main__":
-    cli()
+    if project_type in ["node", "react"]:
+        try:
+            subprocess.run(["node", "generate-docker.js", abs_path], check=True)
+            print("✅ Dockerfile generated for", project_type)
+        except subprocess.CalledProcessError as e:
+            print("❌ Failed to generate Dockerfile:", e)
+    elif project_type == "flutter":
+        try:
+            subprocess.run(["python3", "generate-flutter.py", abs_path], check=True)
+            print("✅ Dockerfile generated for Flutter project")
+        except subprocess.CalledProcessError as e:
+            print("❌ Failed to generate Flutter Dockerfile:", e)
+    else:
+        print("❌ Unsupported or unknown project type.")
