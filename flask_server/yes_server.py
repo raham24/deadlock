@@ -14,19 +14,20 @@ PENSAR_API_URL = "https://api.pensar.dev/ci/scan/dispatch"
 PENSAR_STATUS_URL = "https://api.pensar.dev/ci/scan/status"
 PENSAR_ISSUES_URL = "https://api.pensar.dev/ci/scan/issues"
 
+
 @app.route('/trigger-scan', methods=['POST'])
 def trigger_scan():
     # Get data from request
     data = request.json
-    
+
     if not data or not all(k in data for k in ['owner', 'repo', 'prNumber', 'targetBranch']):
         return jsonify({"error": "Missing required fields"}), 400
-    
+
     owner = data['owner']
     repo = data['repo']
     pr_number = data['prNumber']
     target_branch = data['targetBranch']
-    
+
     try:
         # Get repository ID from GitHub API
         repo_response = requests.get(
@@ -39,10 +40,10 @@ def trigger_scan():
         repo_response.raise_for_status()
         repo_data = repo_response.json()
         repo_id = repo_data['id']
-        
+
         # Construct pull request URL
         pull_request_url = f"https://github.com/{owner}/{repo}/pull/{pr_number}"
-        
+
         # Send request to Pensar API
         pensar_payload = {
             "repoId": repo_id,
@@ -52,93 +53,92 @@ def trigger_scan():
             "pullRequest": pull_request_url,
             "eventType": "pull-request"
         }
-        
+
         pensar_response = requests.post(
             PENSAR_API_URL,
             json=pensar_payload
         )
         pensar_response.raise_for_status()
-        
+
         return jsonify({
             "success": True,
             "repoId": repo_id,
             "pullRequest": pull_request_url,
             "pensarResponse": pensar_response.json()
         })
-        
+
     except requests.exceptions.RequestException as e:
         return jsonify({
             "error": str(e),
             "details": e.response.json() if hasattr(e, 'response') and e.response else None
         }), 500
 
-        
-        
-@app.route('/check-scan-status', methods=['POST'])
 
+@app.route('/check-scan-status', methods=['POST'])
 def check_scan_status():
     # Get data from request
     data = request.json
-    
+
     if not data or 'scanId' not in data:
         return jsonify({"error": "Missing scanId"}), 400
-    
+
     scan_id = data['scanId']
-    
+
     try:
         # Send request to Pensar status API
         status_payload = {
             "scanId": scan_id,
             "apiKey": PENSAR_API_KEY
         }
-        
+
         status_response = requests.post(
             PENSAR_STATUS_URL,
             json=status_payload
         )
         status_response.raise_for_status()
-        
+
         return jsonify({
             "success": True,
             "scanId": scan_id,
             "statusResponse": status_response.json()
         })
-        
+
     except requests.exceptions.RequestException as e:
         return jsonify({
             "error": str(e),
             "details": e.response.json() if hasattr(e, 'response') and e.response else None
         }), 500
 
+
 @app.route('/get-scan-issues', methods=['POST'])
 def get_scan_issues():
     # Get data from request
     data = request.json
-    
+
     if not data or 'scanId' not in data:
         return jsonify({"error": "Missing scanId"}), 400
-    
+
     scan_id = data['scanId']
-    
+
     try:
         # Send request to Pensar issues API
         issues_payload = {
             "scanId": scan_id,
             "apiKey": PENSAR_API_KEY
         }
-        
+
         issues_response = requests.post(
             PENSAR_ISSUES_URL,
             json=issues_payload
         )
         issues_response.raise_for_status()
-        
+
         return jsonify({
             "success": True,
             "scanId": scan_id,
             "issuesResponse": issues_response.json()
         })
-        
+
     except requests.exceptions.RequestException as e:
         return jsonify({
             "error": str(e),
@@ -150,6 +150,6 @@ def get_scan_issues():
 def health_check():
     return jsonify({"status": "ok"})
 
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
-
