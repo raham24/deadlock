@@ -3,7 +3,7 @@ import click
 from colorama import init, Fore, Style
 
 # Import functions from other modules using updated package structure
-from vessel.analyzer import analyze_react_project
+from vessel.analyzer.react_analyzer import analyze_react_project
 from vessel.docker.generator import generate_dockerfile
 from vessel.docker.setup import ensure_docker_available
 from vessel.nginx.generator import generate_nginx_config
