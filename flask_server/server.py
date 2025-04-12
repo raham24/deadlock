@@ -2,11 +2,14 @@ from flask import Flask, request, jsonify, send_from_directory
 import os
 import requests
 from flask_cors import CORS
-
+from dotenv import load_dotenv
+import os
 app = Flask(__name__)
 
 CORS(app)
-GITHUB_API_URL = 'https://api.github.com'
+
+load_dotenv()
+GITHUB_API_URL = os.environ.get('GITHUB_API_URL')
 PENSAR_API_URL = 'https://api.pensar.dev/ci/scan/dispatch'
 
 
