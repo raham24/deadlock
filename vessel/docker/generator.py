@@ -14,7 +14,7 @@ def generate_dockerfile(project_info, output_path):
     """
     try:
         # Determine Node version (could be improved to detect from package.json)
-        node_version = "16-alpine"
+        node_version = "22-alpine"
         build_output = project_info.get('build_output', 'build')
         
         # Create Dockerfile content for a standard React app
