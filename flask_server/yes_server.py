@@ -150,6 +150,78 @@ def get_scan_issues():
 def health_check():
     return jsonify({"status": "ok"})
 
+@app.route('/api/issues', methods=['GET'])
+def get_issues():
+    """Get all issues or filter by severity/category"""
+    severity = request.args.get('severity')
+    category = request.args.get('category')
+    
+    if severity:
+        issues = issue_manager.get_issues_by_severity(severity)
+    elif category:
+        issues = issue_manager.get_issues_by_category(category)
+    else:
+        issues = issue_manager.get_all_issues()
+    
+    return jsonify({"issues": issues})
 
+@app.route('/api/issues/report', methods=['GET'])
+def get_issues_report():
+    """Get a summary report of all issues"""
+    report = issue_manager.generate_report()
+    return jsonify(report)
+
+@app.route('/api/issues', methods=['POST'])
+def add_issue():
+    """Add a new issue"""
+    data = request.json
+    
+    try:
+        issue = Issue(**data)
+        issue_manager.add_issue(issue)
+        return jsonify({"message": "Issue added successfully", "issue": issue.to_dict()}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/issues/bulk', methods=['POST'])
+def add_issues_bulk():
+    """Add multiple issues at once"""
+    data = request.json
+    
+    if not isinstance(data, list):
+        return jsonify({"error": "Expected a list of issues"}), 400
+    
+    issue_manager.add_issues_from_list(data)
+    return jsonify({"message": f"Added {len(data)} issues"}), 201
+
+@app.route('/api/issues', methods=['DELETE'])
+def clear_issues():
+    """Clear all issues"""
+    issue_manager.clear_issues()
+    return jsonify({"message": "All issues cleared"}), 200
+
+@app.route('/api/issues/save', methods=['POST'])
+def save_issues():
+    """Save issues to a file"""
+    data = request.json
+    filepath = data.get('filepath', 'issues.json')
+    
+    success = issue_manager.save_to_file(filepath)
+    if success:
+        return jsonify({"message": f"Saved issues to {filepath}"}), 200
+    else:
+        return jsonify({"error": "Failed to save issues"}), 500
+
+@app.route('/api/issues/load', methods=['POST'])
+def load_issues():
+    """Load issues from a file"""
+    data = request.json
+    filepath = data.get('filepath', 'issues.json')
+    
+    success = issue_manager.load_from_file(filepath)
+    if success:
+        return jsonify({"message": f"Loaded issues from {filepath}", "count": len(issue_manager.issues)}), 200
+    else:
+        return jsonify({"error": f"Failed to load issues from {filepath}"}), 500
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
